@@ -590,6 +590,6 @@ def run_train_bpe(
                 Merges are ordered by order of creation.
     """
 
-    from cs336_basics.run_bpe import run_train_bpe
+    from cs336_basics.run_train_bpe import run_train_bpe
 
     return run_train_bpe(input_path, vocab_size, special_tokens)
