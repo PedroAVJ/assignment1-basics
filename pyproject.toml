@@ -49,6 +49,7 @@ line-length = 120
 [dependency-groups]
 dev = [
     "sortedcontainers-stubs>=2.4.3",
+    "types-regex>=2026.7.19.20260720",
 ]
 
 [tool.ruff.lint]
