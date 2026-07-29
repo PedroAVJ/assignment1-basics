@@ -111,11 +111,12 @@ def run_train_bpe(
     merges_count = vocab_size - 256 - len(special_tokens)
     merges: list[tuple[bytes, bytes]] = []
 
+    pair_counts: defaultdict[tuple[bytes, bytes], int] = defaultdict(int)
+    for word, frequency in frequency_table.items():
+        for left, right in pairwise(word):
+            pair_counts[(left, right)] += frequency
+
     for _ in range(merges_count):
-        pair_counts: defaultdict[tuple[bytes, bytes], int] = defaultdict(int)
-        for word, frequency in frequency_table.items():
-            for left, right in pairwise(word):
-                pair_counts[(left, right)] += frequency
         most_frequent_pair, _ = max(pair_counts.items(), key=lambda kv: (kv[1], kv[0]))
         vocabulary[len(vocabulary)] = b"".join(most_frequent_pair)
         merges.append(most_frequent_pair)
@@ -124,6 +125,8 @@ def run_train_bpe(
             for pair in pairwise(word_bytes):
                 if most_frequent_pair == pair:
                     frequency_table.pop(word_bytes)
+                    for left, right in pairwise(word_bytes):
+                        pair_counts[(left, right)] -= frequency
                     new_word: list[bytes] = []
                     cur = 0
                     length = len(word_bytes)
@@ -139,6 +142,8 @@ def run_train_bpe(
                             new_word.append(word_bytes[cur])
                         cur += 1
                     frequency_table[tuple(new_word)] = frequency
+                    for left, right in pairwise(tuple(new_word)):
+                        pair_counts[(left, right)] += frequency
                     break
 
     for special_token in special_tokens:
