@@ -118,6 +118,7 @@ def run_train_bpe(
                 pair_counts[(left, right)] += frequency
         most_frequent_pair, _ = max(pair_counts.items(), key=lambda kv: (kv[1], kv[0]))
         vocabulary[len(vocabulary)] = b"".join(most_frequent_pair)
+        merges.append(most_frequent_pair)
 
         for word_bytes, frequency in list(frequency_table.items()):
             for pair in pairwise(word_bytes):
