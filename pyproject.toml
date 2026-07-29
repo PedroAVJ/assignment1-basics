@@ -20,6 +20,7 @@ dependencies = [
     "ty>=0.0.26",
     "ruff>=0.15.8",
     "sortedcontainers>=2.4.0",
+    "more-itertools>=11.1.0",
 ]
 
 [build-system]
@@ -48,6 +49,9 @@ line-length = 120
 
 [dependency-groups]
 dev = [
+    "modal>=1.5.3",
+    "py-spy>=0.4.2",
+    "scalene>=2.3.0",
     "sortedcontainers-stubs>=2.4.3",
     "types-regex>=2026.7.19.20260720",
 ]
