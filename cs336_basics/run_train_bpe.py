@@ -112,11 +112,12 @@ def run_train_bpe(
     ## Usage
     with open(input_path, "rb") as f:
         num_processes = os.process_cpu_count()
+        assert num_processes != None
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         futures: list[Future[Counter[tuple[bytes, ...]]]] = []
         with ProcessPoolExecutor(max_workers=num_processes) as executor:
-            for start, end in zip(boundaries[:-1], boundaries[1:]):
+            for start, end in pairwise(boundaries):
                 future = executor.submit(pretokenize, input_path, special_tokens, start, end)
                 futures.append(future)
 
