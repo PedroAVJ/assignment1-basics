@@ -1,6 +1,13 @@
 import os
+from collections import Counter, defaultdict
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures._base import Future
 from itertools import pairwise
 from typing import BinaryIO
+
+import regex as re
+
+PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
 
 def find_chunk_boundaries(
@@ -50,6 +57,26 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
+def pretokenize(
+    input_path: str | os.PathLike, special_tokens: list[str], start: int, end: int
+) -> Counter[tuple[bytes, ...]]:
+    with open(input_path, "rb") as f:
+        f.seek(start)
+        chunk = f.read(end - start).decode("utf-8", errors="ignore")
+        # Run pre-tokenization on your chunk and store the counts for each pre-token
+
+        special_tokens_pattern = "|".join([re.escape(special_token) for special_token in special_tokens])
+        stories = re.split(special_tokens_pattern, chunk)
+
+        frequency_table: Counter[tuple[bytes, ...]] = Counter()
+
+        for story in stories:
+            for pretoken_match in re.finditer(PATTERN, story):
+                pretoken = pretoken_match.group()
+                frequency_table[tuple(bytes([n]) for n in pretoken.encode())] += 1
+        return frequency_table
+
+
 def run_train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
@@ -80,33 +107,21 @@ def run_train_bpe(
 
     vocabulary: dict[int, bytes] = {byte: byte.to_bytes() for byte in range(256)}
 
-    from collections import defaultdict
-
-    frequency_table: defaultdict[tuple[bytes, ...], int] = defaultdict(int)
-
-    import regex as re
-
-    PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+    frequency_table: Counter[tuple[bytes, ...]] = Counter()
 
     ## Usage
     with open(input_path, "rb") as f:
         num_processes = 4
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
-        # The following is a serial implementation, but you can parallelize this
-        # by sending each start/end pair to a set of processes.
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore")
-            # Run pre-tokenization on your chunk and store the counts for each pre-token
+        futures: list[Future[Counter[tuple[bytes, ...]]]] = []
+        with ProcessPoolExecutor(max_workers=num_processes) as executor:
+            for start, end in zip(boundaries[:-1], boundaries[1:]):
+                future = executor.submit(pretokenize, input_path, special_tokens, start, end)
+                futures.append(future)
 
-            special_tokens_pattern = "|".join([re.escape(special_token) for special_token in special_tokens])
-            stories = re.split(special_tokens_pattern, chunk)
-
-            for story in stories:
-                for pretoken_match in re.finditer(PATTERN, story):
-                    pretoken = pretoken_match.group()
-                    frequency_table[tuple(bytes([n]) for n in pretoken.encode())] += 1
+            for future in futures:
+                frequency_table += future.result()
 
     merges_count = vocab_size - 256 - len(special_tokens)
     merges: list[tuple[bytes, bytes]] = []
