@@ -4,7 +4,11 @@ from pathlib import Path
 
 import modal
 
-image = modal.Image.debian_slim(python_version="3.13").pip_install("regex").add_local_python_source("cs336_basics")
+image = (
+    modal.Image.debian_slim(python_version="3.13")
+    .pip_install("regex", "scalene", "py-spy")
+    .add_local_python_source("cs336_basics")
+)
 
 volume = modal.Volume.from_name("cs336-data", create_if_missing=True)
 app = modal.App("bpe-train", image=image)
@@ -24,6 +28,36 @@ def download(filename: str = "TinyStoriesV2-GPT4-train.txt") -> str:
     tmp.rename(dest)
     volume.commit()
     return f"downloaded: {dest} ({dest.stat().st_size / 1e9:.2f} GB)"
+
+
+@app.function(cpu=16, memory=(30 * 1024, 30 * 1024), volumes={"/data": volume}, timeout=3600)
+def profile(vocab_size: int = 10_000, input_file: str = "TinyStoriesV2-GPT4-valid.txt") -> None:
+    import os
+    import subprocess
+
+    subprocess.run(
+        [
+            "py-spy",
+            "record",
+            "--subprocesses",
+            "--format",
+            "speedscope",
+            "-o",
+            "/data/pyspy-profile.speedscope.json",
+            "--",
+            "python",
+            "cs336_basics/profile_run_train_bpe.py",
+        ],
+        cwd="/root",
+        env={
+            **os.environ,
+            "PYTHONPATH": "/root",
+            "PROFILE_INPUT": f"/data/{input_file}",
+            "PROFILE_VOCAB": str(vocab_size),
+        },
+        check=True,
+    )
+    volume.commit()
 
 
 @app.function(cpu=16, memory=(30 * 1024, 30 * 1024), volumes={"/data": volume}, timeout=3600)
