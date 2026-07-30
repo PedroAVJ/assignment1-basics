@@ -111,7 +111,7 @@ def run_train_bpe(
 
     ## Usage
     with open(input_path, "rb") as f:
-        num_processes = os.cpu_count()
+        num_processes = os.process_cpu_count()
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         futures: list[Future[Counter[tuple[bytes, ...]]]] = []

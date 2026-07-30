@@ -4,7 +4,7 @@ from pathlib import Path
 
 import modal
 
-image = modal.Image.debian_slim(python_version="3.12").pip_install("regex").add_local_python_source("cs336_basics")
+image = modal.Image.debian_slim(python_version="3.13").pip_install("regex").add_local_python_source("cs336_basics")
 
 volume = modal.Volume.from_name("cs336-data", create_if_missing=True)
 app = modal.App("bpe-train", image=image)
