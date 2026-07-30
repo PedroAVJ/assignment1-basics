@@ -42,6 +42,8 @@ def profile(vocab_size: int = 10_000, input_file: str = "TinyStoriesV2-GPT4-vali
             "--subprocesses",
             "--format",
             "speedscope",
+            "-r",
+            "10",
             "-o",
             "/data/pyspy-profile.speedscope.json",
             "--",
