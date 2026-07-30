@@ -126,40 +126,46 @@ def run_train_bpe(
     merges_count = vocab_size - 256 - len(special_tokens)
     merges: list[tuple[bytes, bytes]] = []
 
+    pair_to_words: defaultdict[tuple[bytes, bytes], set[tuple[bytes, ...]]] = defaultdict(set)
     pair_counts: defaultdict[tuple[bytes, bytes], int] = defaultdict(int)
     for word, frequency in frequency_table.items():
         for left, right in pairwise(word):
             pair_counts[(left, right)] += frequency
+            pair_to_words[(left, right)].add(word)
 
     for _ in range(merges_count):
         most_frequent_pair, _ = max(pair_counts.items(), key=lambda kv: (kv[1], kv[0]))
         vocabulary[len(vocabulary)] = b"".join(most_frequent_pair)
         merges.append(most_frequent_pair)
 
-        for word_bytes, frequency in list(frequency_table.items()):
-            for pair in pairwise(word_bytes):
-                if most_frequent_pair == pair:
-                    frequency_table.pop(word_bytes)
-                    for left, right in pairwise(word_bytes):
-                        pair_counts[(left, right)] -= frequency
-                    new_word: list[bytes] = []
-                    cur = 0
-                    length = len(word_bytes)
-                    while cur in range(length):
-                        next = cur + 1
-                        if next not in range(length):
-                            new_word.append(word_bytes[cur])
-                            break
-                        if most_frequent_pair == (word_bytes[cur], word_bytes[next]):
-                            new_word.append(b"".join(most_frequent_pair))
-                            cur += 1
-                        else:
-                            new_word.append(word_bytes[cur])
-                        cur += 1
-                    frequency_table[tuple(new_word)] = frequency
-                    for left, right in pairwise(tuple(new_word)):
-                        pair_counts[(left, right)] += frequency
+        filtered_words = pair_to_words.pop(most_frequent_pair)
+
+        for word_bytes, frequency in (
+            (filtered_word, frequency_table[filtered_word]) for filtered_word in filtered_words
+        ):
+            frequency_table.pop(word_bytes)
+            for left, right in pairwise(word_bytes):
+                pair_counts[(left, right)] -= frequency
+                if word_bytes in pair_to_words[(left, right)]:
+                    pair_to_words[(left, right)].remove(word_bytes)
+            new_word: list[bytes] = []
+            cur = 0
+            length = len(word_bytes)
+            while cur in range(length):
+                next = cur + 1
+                if next not in range(length):
+                    new_word.append(word_bytes[cur])
                     break
+                if most_frequent_pair == (word_bytes[cur], word_bytes[next]):
+                    new_word.append(b"".join(most_frequent_pair))
+                    cur += 1
+                else:
+                    new_word.append(word_bytes[cur])
+                cur += 1
+            frequency_table[tuple(new_word)] = frequency
+            for left, right in pairwise(tuple(new_word)):
+                pair_counts[(left, right)] += frequency
+                pair_to_words[(left, right)].add(tuple(new_word))
 
     for special_token in special_tokens:
         vocabulary[len(vocabulary)] = special_token.encode()
