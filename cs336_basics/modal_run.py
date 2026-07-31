@@ -95,6 +95,35 @@ def train(vocab_size: int, input_file: str) -> tuple[dict[int, bytes], list[tupl
     return vocab, merges, elapsed
 
 
+@app.function(cpu=(64, 64), memory=(100 * 1024, 100 * 1024), volumes={"/data": volume}, timeout=12 * 3600)
+def train_to_volume(vocab_size: int, input_file: str) -> str:
+    """Train and persist results to the volume, so nothing depends on the local client staying connected.
+
+    Pair with `modal run --detach` for long runs.
+    """
+    from cs336_basics.run_train_bpe import run_train_bpe
+
+    start = time.monotonic()
+    vocab, merges = run_train_bpe(
+        input_path=f"/data/{input_file}",
+        vocab_size=vocab_size,
+        special_tokens=["<|endoftext|>"],
+    )
+    elapsed = time.monotonic() - start
+
+    stem = Path(input_file).stem
+    with open(f"/data/{stem}_vocab.pkl", "wb") as f:
+        pickle.dump(vocab, f)
+    with open(f"/data/{stem}_merges.pkl", "wb") as f:
+        pickle.dump(merges, f)
+    volume.commit()
+
+    longest = max(vocab.values(), key=len)
+    summary = f"trained in {elapsed:.1f}s; vocab={len(vocab)}, merges={len(merges)}; longest token: {longest!r}"
+    print(summary)
+    return summary
+
+
 @app.local_entrypoint()
 def main(vocab_size: int = 10_000, input_file: str = "TinyStoriesV2-GPT4-valid.txt") -> None:
     vocab, merges, elapsed = train.remote(vocab_size, input_file)
