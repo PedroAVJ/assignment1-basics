@@ -14,6 +14,7 @@ volume = modal.Volume.from_name("cs336-data", create_if_missing=True)
 app = modal.App("bpe-train", image=image)
 
 TRAIN_URL = "https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-train.txt"
+OWT_TRAIN_URL = "https://huggingface.co/datasets/stanford-cs336/owt-sample/resolve/main/owt_train.txt.gz"
 
 
 @app.function(volumes={"/data": volume}, timeout=1800)
@@ -30,7 +31,25 @@ def download(filename: str = "TinyStoriesV2-GPT4-train.txt") -> str:
     return f"downloaded: {dest} ({dest.stat().st_size / 1e9:.2f} GB)"
 
 
-@app.function(cpu=16, memory=(30 * 1024, 30 * 1024), volumes={"/data": volume}, timeout=3600)
+@app.function(volumes={"/data": volume}, timeout=7200)
+def download_owt(filename: str = "owt_train.txt") -> str:
+    """Stream the gzipped OWT sample straight to disk, decompressing as it lands."""
+    import gzip
+    import shutil
+    import urllib.request
+
+    dest = Path("/data") / filename
+    if dest.exists():
+        return f"already present: {dest} ({dest.stat().st_size / 1e9:.2f} GB)"
+    tmp = dest.with_suffix(".part")
+    with urllib.request.urlopen(OWT_TRAIN_URL) as resp, gzip.GzipFile(fileobj=resp) as gz, open(tmp, "wb") as out:
+        shutil.copyfileobj(gz, out, length=16 * 1024 * 1024)
+    tmp.rename(dest)
+    volume.commit()
+    return f"downloaded: {dest} ({dest.stat().st_size / 1e9:.2f} GB)"
+
+
+@app.function(cpu=(64, 64), memory=(100 * 1024, 100 * 1024), volumes={"/data": volume}, timeout=3600)
 def profile(vocab_size: int = 10_000, input_file: str = "TinyStoriesV2-GPT4-valid.txt") -> None:
     import os
     import subprocess
@@ -62,7 +81,7 @@ def profile(vocab_size: int = 10_000, input_file: str = "TinyStoriesV2-GPT4-vali
     volume.commit()
 
 
-@app.function(cpu=16, memory=(30 * 1024, 30 * 1024), volumes={"/data": volume}, timeout=3600)
+@app.function(cpu=(64, 64), memory=(100 * 1024, 100 * 1024), volumes={"/data": volume}, timeout=12 * 3600)
 def train(vocab_size: int, input_file: str) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]], float]:
     from cs336_basics.run_train_bpe import run_train_bpe
 
