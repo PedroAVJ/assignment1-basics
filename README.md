@@ -1,5 +1,8 @@
 # CS336 Spring 2025 Assignment 1: Basics
 
+A student workspace for Stanford CS336 Spring 2025 Assignment 1, which builds
+a language model from scratch.
+
 For a full description of the assignment, see the assignment handout at
 [cs336_assignment1_basics.pdf](./cs336_assignment1_basics.pdf)
 
@@ -47,4 +50,3 @@ gunzip owt_valid.txt.gz
 
 cd ..
 ```
-
